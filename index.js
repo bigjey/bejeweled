@@ -1,8 +1,9 @@
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
+const SCORE_SIZE = 60;
 const W = 640;
-const H = 640;
+const H = 640 + SCORE_SIZE;
 
 const GEM_W = 80;
 const GEM_H = 80;
@@ -39,18 +40,22 @@ STATES[(STATES["REVERT"] = 4)] = "REVERT";
 STATES[(STATES["REMOVE"] = 5)] = "REMOVE";
 STATES[(STATES["FALL"] = 6)] = "FALL";
 STATES[(STATES["ADD"] = 7)] = "ADD";
+STATES[(STATES["GAME_OVER"] = 8)] = "GAME_OVER";
 
-let currentState = STATES.ADD;
+let currentState = STATES.GAME_OVER;
 let nextState = currentState;
 let stateChangeDelay = 0;
 
 let mousePos = null;
 let mouseClicked = false;
 let mousePressed = false;
+const keyPressed = {};
 
 let selectedGem = null;
 let swapGem = null;
 let totalGems = 0;
+let score = 0;
+let maxBurned = 0;
 
 function tick() {
   const dt = Date.now() - lastUpdate;
@@ -70,7 +75,7 @@ function update(dt) {
     stateChangeDelay -= dt;
   } else {
     if (currentState !== nextState) {
-      console.log("transition", STATES[currentState], "=>", STATES[nextState]);
+      // console.log("transition", STATES[currentState], "=>", STATES[nextState]);
       currentState = nextState;
     }
 
@@ -119,33 +124,43 @@ function update(dt) {
             {
               let l = 1;
               let xx = x + 1;
-              while (xx < 8 && gems[y][xx].color === gems[y][x].color) {
+              while (
+                xx < 8 &&
+                !gems[y][xx].scoredH &&
+                gems[y][xx].color === gems[y][x].color
+              ) {
                 l++;
                 xx++;
               }
               if (l >= 3) {
                 hasMatches = true;
-                console.log("match!", gems[y][x].color, "h");
 
                 while (l > 0) {
                   l--;
+                  score += l;
                   gems[y][x + l].remove = true;
+                  gems[y][x + l].scoredH = true;
                 }
               }
             }
             {
               let l = 1;
               let yy = y + 1;
-              while (yy < 8 && gems[yy][x].color === gems[y][x].color) {
+              while (
+                yy < 8 &&
+                !gems[yy][x].scoredV &&
+                gems[yy][x].color === gems[y][x].color
+              ) {
                 l++;
                 yy++;
               }
               if (l >= 3) {
                 hasMatches = true;
-                console.log("match!", gems[y][x].color, "v");
                 while (l > 0) {
                   l--;
+                  score += l;
                   gems[y + l][x].remove = true;
+                  gems[y + l][x].scoredV = true;
                 }
               }
             }
@@ -162,7 +177,11 @@ function update(dt) {
         } else if (swapGem) {
           nextState = STATES.REVERT;
         } else {
-          nextState = STATES.USER;
+          if (isSolvable(gems)) {
+            nextState = STATES.USER;
+          } else {
+            nextState = STATES.GAME_OVER;
+          }
         }
 
         break;
@@ -217,6 +236,8 @@ function update(dt) {
             totalGems++;
             gems[0][x].alive = true;
             gems[0][x].remove = false;
+            gems[0][x].scoredH = false;
+            gems[0][x].scoredV = false;
             gems[0][x].color =
               COLORS[Math.floor(Math.random() * COLORS.length)];
           }
@@ -228,6 +249,21 @@ function update(dt) {
           nextState = STATES.CHECK;
         }
         stateChangeDelay = 100;
+        break;
+
+      case STATES.GAME_OVER:
+        if (keyPressed["Space"]) {
+          for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+              gems[y][x].alive = false;
+            }
+          }
+
+          score = 0;
+          totalGems = 0;
+
+          nextState = STATES.ADD;
+        }
         break;
 
       default:
@@ -287,15 +323,28 @@ function render() {
       } else {
         drawShape(gems[y][x], x, y);
       }
-
-      // ctx.fillRect(
-      //   x * GEM_W + GEM_GAP,
-      //   y * GEM_H + GEM_GAP,
-      //   GEM_W - GEM_GAP * 2,
-      //   GEM_H - GEM_GAP * 2
-      // );
     }
   }
+
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(0, H - SCORE_SIZE, W, SCORE_SIZE);
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  if (currentState === STATES.GAME_OVER) {
+    ctx.fillStyle = BG_COLOR_2;
+    ctx.fillRect(0, 0, W, H - SCORE_SIZE);
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "60px monospace";
+    ctx.fillText(`No more moves`, W / 2, H * 0.4, W * 0.8);
+
+    ctx.font = "32px monospace";
+    ctx.fillText(`[Space] - restart`, W / 2, H * 0.4 + 60, W * 0.8);
+  }
+
+  ctx.font = "32px monospace";
+  ctx.fillText(`score: ${score}`, W / 2, H, W * 0.8);
 }
 
 function initialize() {
@@ -305,6 +354,8 @@ function initialize() {
       gems[y][x] = {
         alive: false,
         remove: false,
+        scoredH: false,
+        scoredV: false,
         color: COLORS[Math.floor(Math.random() * COLORS.length)],
       };
     }
@@ -312,6 +363,56 @@ function initialize() {
 
   lastUpdate = Date.now();
   window.requestAnimationFrame(tick);
+}
+
+function isSolvable(grid) {
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const c = grid[y][x].color;
+
+      // checking .xx. horizontally
+      if (matches(grid, x + 1, y, c)) {
+        if (matches(grid, x - 2, y, c)) return true;
+        if (matches(grid, x - 1, y - 1, c)) return true;
+        if (matches(grid, x - 1, y + 1, c)) return true;
+        if (matches(grid, x + 3, y, c)) return true;
+        if (matches(grid, x + 2, y - 1, c)) return true;
+        if (matches(grid, x + 2, y + 1, c)) return true;
+      }
+
+      // checking x.x horizontally
+      if (matches(grid, x + 2, y, c)) {
+        if (matches(grid, x + 1, y - 1, c)) return true;
+        if (matches(grid, x + 1, y + 1, c)) return true;
+      }
+
+      // checking .xx. vertically
+      if (matches(grid, x, y + 1, c)) {
+        if (matches(grid, x, y - 2, c)) return true;
+        if (matches(grid, x - 1, y - 1, c)) return true;
+        if (matches(grid, x + 1, y - 1, c)) return true;
+        if (matches(grid, x, y + 3, c)) return true;
+        if (matches(grid, x - 1, y + 2, c)) return true;
+        if (matches(grid, x + 1, y + 2, c)) return true;
+      }
+
+      // checking x.x vertically
+      if (matches(grid, x, y + 2, c)) {
+        if (matches(grid, x - 1, y + 1, c)) return true;
+        if (matches(grid, x + 1, y + 1, c)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function matches(grid, x, y, color) {
+  if (x < 0 || y < 0 || x > 7 || y > 7) {
+    return false;
+  }
+
+  return grid[y][x].color === color;
 }
 
 function drawShape(shape, x, y) {
@@ -474,6 +575,13 @@ canvas.addEventListener("mousemove", function (e) {
 
 canvas.addEventListener("mouseleave", function (e) {
   mousePos = null;
+});
+
+window.addEventListener("keydown", function (e) {
+  keyPressed[e.code] = true;
+});
+window.addEventListener("keyup", function (e) {
+  keyPressed[e.code] = false;
 });
 
 initialize();
