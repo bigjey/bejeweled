@@ -567,10 +567,14 @@ window.addEventListener("mouseup", function () {
 });
 
 canvas.addEventListener("mousemove", function (e) {
-  mousePos = {
-    x: Math.floor(e.offsetX / GEM_W),
-    y: Math.floor(e.offsetY / GEM_H),
-  };
+  const x = Math.floor(e.offsetX / GEM_W);
+  const y = Math.floor(e.offsetY / GEM_H);
+
+  if (x < 8 && y < 8) {
+    mousePos = { x, y };
+  } else {
+    mousePos = null;
+  }
 });
 
 canvas.addEventListener("mouseleave", function (e) {
