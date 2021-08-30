@@ -42,7 +42,7 @@ STATES[(STATES["FALL"] = 6)] = "FALL";
 STATES[(STATES["ADD"] = 7)] = "ADD";
 STATES[(STATES["GAME_OVER"] = 8)] = "GAME_OVER";
 
-let currentState = STATES.GAME_OVER;
+let currentState = STATES.ADD;
 let nextState = currentState;
 let stateChangeDelay = 0;
 
