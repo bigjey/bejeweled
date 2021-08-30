@@ -330,7 +330,6 @@ function render() {
   ctx.fillRect(0, H - SCORE_SIZE, W, SCORE_SIZE);
 
   ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
   if (currentState === STATES.GAME_OVER) {
     ctx.fillStyle = BG_COLOR_2;
     ctx.fillRect(0, 0, W, H - SCORE_SIZE);
@@ -344,10 +343,13 @@ function render() {
   }
 
   ctx.font = "32px monospace";
-  ctx.fillText(`score: ${score}`, W / 2, H, W * 0.8);
+  ctx.fillText(`score: ${score}`, W / 2, H - 30, W * 0.8);
 }
 
 function initialize() {
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+
   for (let y = 0; y < 8; y++) {
     gems[y] = new Array(8);
     for (let x = 0; x < 8; x++) {
